@@ -13,3 +13,7 @@ libraryDependencies += "org.apache.spark" %% "spark-core" % "2.3.0"
 // https://mvnrepository.com/artifact/com.twitter/scalding-args
 libraryDependencies += "com.twitter" %% "scalding-args" % "0.13.1"
 
+// https://mvnrepository.com/artifact/io.spray/spray-json
+libraryDependencies += "io.spray" %% "spray-json" % "1.3.1"
+
+
