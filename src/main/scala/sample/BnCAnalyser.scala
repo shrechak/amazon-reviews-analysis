@@ -4,8 +4,6 @@ import com.twitter.scalding.Args
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
-import sample.SalesRankAnalyser.args
-import sample.StandardiseData.{reviewsInputPath, spark}
 
 object BnCAnalyser extends App{
 
@@ -16,7 +14,7 @@ object BnCAnalyser extends App{
 
   val spark = SparkSession.builder().getOrCreate()
 
-  val price = spark.read.parquet(reviewsInputPath)
+  val price = spark.read.parquet(inputPath)
 
   val topCategoryCount = price.select("finalTopCategory").distinct.count()
   println(s"The total number of top categories are: $topCategoryCount")
@@ -50,7 +48,6 @@ object BnCAnalyser extends App{
 
 
   //Brands sorted by categoryCoverage
-  import org.apache.spark.sql.expressions.Window
   price
     .filter("brand not in ('','unknown', 'Unknown')")
     .groupBy("finalTopCategory", "brand")
