@@ -4,12 +4,13 @@ import com.twitter.scalding.Args
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.expressions.Window
 
 object SalesRankAnalyser extends App{
 
   val cmdArgs = Args(args)
-
-  val inputPath = cmdArgs("input")
+  val reviewsInputPath = cmdArgs("reviews")
+  val metadataInputPath = cmdArgs("metadata")
   val outputPath = cmdArgs("output")
 
   val spark = SparkSession.builder().getOrCreate()
@@ -27,29 +28,21 @@ object SalesRankAnalyser extends App{
   val udf1 = udf{source: String => getCategory(source)}
   val udf2 = udf{source: String => getSalesRank(source)}
 
-
-  val dedupData = spark.read.parquet("s3://indix-users/shreya/required/partitioned-metadata/")
-  val dedupData2 = dedupData.withColumn("salesRankJson", to_json(struct(col("salesRankNew"))))
-    .withColumn("sample", get_json_object(col("salesRankJson"), "$.salesRankNew"))
-    .withColumn("topCategory", udf1(col("sample")))
-    .withColumn("salesRankInCategory", udf2(col("sample")))
-    .drop("sample", "salesRankJson")
-
-  val topCategoryCount = dedupData2.select("topCategory").distinct.count()
-  println(s"The total number of top categories are: $topCategoryCount")
-
-  import org.apache.spark.sql.expressions.Window
-
-  val salesRankWindow = Window.partitionBy(col("topCategory"), col("brand")).orderBy(asc("salesRankInCategory"))
+  val dedupData = spark.read.parquet(reviewsInputPath)
 
 
-  //top 5 ranked ASINs in B+C category
-  dedupData2
+  val price = spark.read.parquet(metadataInputPath)
+  val salesRankWindow = Window.partitionBy(col("finalTopCategory"), col("brand")).orderBy(asc("salesRankInCategory"), asc("overall"))
+
+  price
+    .join(dedupData, "asin")
     .withColumn("rank", rank().over(salesRankWindow))
     .filter(col("rank") <= 5)
-    .filter("topCategory is not null")
-    .groupBy("topCategory", "brand")
-    .agg(collect_list("asin"))
-    .write.json(outputPath+"/top5")
+    .groupBy("finalTopCategory", "brand")
+    .agg(collect_list("asin").alias("asins"))
+    .filter("size(asins) == 5")
+    .withColumn("rn", row_number().over( Window.partitionBy(col("finalTopCategory")).orderBy("brand")))
+    .filter(col("rn") <= 3)
+    .write.json(outputPath+"/bestSellers")
 
 }
